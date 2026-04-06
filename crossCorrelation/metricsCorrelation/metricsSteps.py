@@ -3,58 +3,55 @@ import pandas as pd
 from scipy import stats
 import matplotlib.pyplot as plt
 import os
+from datetime import datetime
 
 
-#TODO доработать сохранение метрик в файл?
-def analyze_cross_correlation(ccf_df, df_norm, alpha=0.05):
-    # Количество наблюдений
+def analyze_cross_correlation_to_file(ccf_df, df_norm, output_file, alpha=0.05):
+    """
+    Анализ кросс-корреляции с сохранением в файл
+    """
     n = len(df_norm)
-
-    # Доверительный интервал
     z_score = stats.norm.ppf(1 - alpha / 2)
     confidence_interval = z_score / np.sqrt(n)
 
-    # Находим максимальную положительную и отрицательную корреляцию
     max_positive = ccf_df.loc[ccf_df["correlation"].idxmax()]
     max_negative = ccf_df.loc[ccf_df["correlation"].idxmin()]
     max_abs = ccf_df.loc[ccf_df["correlation"].abs().idxmax()]
 
-    # Вывод результатов
-    print("=" * 60)
-    print("КРОСС-КОРРЕЛЯЦИОННЫЙ АНАЛИЗ")
-    print("=" * 60)
+    # Открываем файл для записи
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write("=" * 60 + "\n")
+        f.write("КРОСС-КОРРЕЛЯЦИОННЫЙ АНАЛИЗ\n")
+        f.write(f"Дата отчета: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write("=" * 60 + "\n\n")
 
-    print(f"   Количество наблюдений: {n}")
-    print(f"   Уровень значимости: {alpha}")
-    print(f"   Z-оценка: {z_score:.3f}")
-    print(f"   Доверительный интервал: ±{confidence_interval:.4f}")
+        f.write(f"Количество наблюдений: {n}\n")
+        f.write(f"Уровень значимости: {alpha}\n")
+        f.write(f"Z-оценка: {z_score:.3f}\n")
+        f.write(f"Доверительный интервал: ±{confidence_interval:.4f}\n\n")
 
-    print(f"\n Результаты корреляции:")
-    print(f"   Максимальная положительная: {max_positive['correlation']:.4f} (лаг {max_positive['lag']})")
-    print(f"   Максимальная отрицательная: {max_negative['correlation']:.4f} (лаг {max_negative['lag']})")
-    print(f"   Максимальная по модулю: {max_abs['correlation']:.4f} (лаг {max_abs['lag']})")
+        f.write("Результаты корреляции:\n")
+        f.write(f"  Максимальная положительная: {max_positive['correlation']:.4f} (лаг {max_positive['lag']})\n")
+        f.write(f"  Максимальная отрицательная: {max_negative['correlation']:.4f} (лаг {max_negative['lag']})\n")
+        f.write(f"  Максимальная по модулю: {max_abs['correlation']:.4f} (лаг {max_abs['lag']})\n\n")
 
-    # Оценка значимости
-    print(f"\n Статистическая значимость:")
-    for name, corr in [("Положительная", max_positive), ("Отрицательная", max_negative), ("По модулю", max_abs)]:
-        if abs(corr['correlation']) > confidence_interval:
-            print(f"   ✅ {name} корреляция значима (|{corr['correlation']:.4f}| > {confidence_interval:.4f})")
-        else:
-            print(f"   ⚠️ {name} корреляция не значима (|{corr['correlation']:.4f}| < {confidence_interval:.4f})")
+        f.write("Статистическая значимость:\n")
+        for name, corr in [("Положительная", max_positive), ("Отрицательная", max_negative), ("По модулю", max_abs)]:
+            if abs(corr['correlation']) > confidence_interval:
+                f.write(f"  ✅ {name} корреляция значима (|{corr['correlation']:.4f}| > {confidence_interval:.4f})\n")
+            else:
+                f.write(
+                    f"  ⚠️ {name} корреляция не значима (|{corr['correlation']:.4f}| < {confidence_interval:.4f})\n")
 
-    # Создаем датафрейм с результатами
-    results_df = pd.DataFrame({
-        'тип': ['положительная', 'отрицательная', 'по модулю'],
-        'корреляция': [max_positive['correlation'], max_negative['correlation'], max_abs['correlation']],
-        'лаг': [max_positive['lag'], max_negative['lag'], max_abs['lag']],
-        'значима': [
-            abs(max_positive['correlation']) > confidence_interval,
-            abs(max_negative['correlation']) > confidence_interval,
-            abs(max_abs['correlation']) > confidence_interval
-        ]
-    })
+        # Добавляем все лаги с корреляциями
+        f.write("\n" + "=" * 60 + "\n")
+        f.write("ПОЛНАЯ ТАБЛИЦА КОРРЕЛЯЦИЙ\n")
+        f.write("=" * 60 + "\n")
+        f.write(ccf_df.to_string(index=False))
 
-    return results_df
+    print(f"✅ Отчет сохранен в файл: {output_file}")
+    return output_file
+
 
 
 def plot_ccf(ccf_df, df1_name, df2_name, conf_level=None):
@@ -87,5 +84,5 @@ def plot_ccf(ccf_df, df1_name, df2_name, conf_level=None):
 
 #TODO доработать сохранение графика в проект и его закрытие после сохранения
     # base_dir = r"C:\Users\aleks\PycharmProjects\NIR2\crossCorrelation"
-    # plot_path = os.path.join(base_dir, "plots", f"Кросс-корреляция: {df1_name} vs {df2_name}.png")
+    # plot_path = os.path.join(base_dir, "plots", f"name: {df1_name} vs {df2_name}.png")
     # plt.savefig(plot_path, dpi=300, bbox_inches="tight")

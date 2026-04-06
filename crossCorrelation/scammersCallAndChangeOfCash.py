@@ -15,6 +15,6 @@ df_scammers_and_cash_norm = data_normalization(df_scammers_call_and_change_of_ca
 # Корреляция
 corr_scammers_and_cash = cross_corr(df_scammers_and_cash_norm["number of requests"], df_scammers_and_cash_norm["cash billion rubles"], lag_max=12)
 # Метрики
-results = analyze_cross_correlation(corr_scammers_and_cash, df_scammers_and_cash_norm)
+results = analyze_cross_correlation_to_file(corr_scammers_and_cash, df_scammers_and_cash_norm, "мошенники_вонят_наличных_денек.txt")
 # График
 plot_ccf(corr_scammers_and_cash,"мошенники звонят", "наличные", conf_level=0.15)
