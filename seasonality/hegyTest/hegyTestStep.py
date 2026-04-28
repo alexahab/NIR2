@@ -296,10 +296,6 @@ def hegy_seasonality_test(
     Возвращает:
     ----------
     dict : результаты теста.
-
-    Пример использования:
-    ---------------------
-    >>> result = hegy_seasonality_test('DboFizLKolObs.xlsx')
     """
 
     # Поиск файла
