@@ -60,6 +60,34 @@ def _load_data(file_path, sheet_name=0):
     return df['value'].values.astype(float), pd.to_datetime(df['date'].values), os.path.basename(file_path)
 
 
+def mase(y_train, y_true, y_pred, seasonal_period=1):
+    """
+    Mean Absolute Scaled Error
+    Hyndman & Koehler (2006)
+    """
+
+    y_train = np.asarray(y_train)
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+
+    if seasonal_period == 1:
+        naive_errors = np.abs(np.diff(y_train))
+    else:
+        naive_errors = np.abs(
+            y_train[seasonal_period:] -
+            y_train[:-seasonal_period]
+        )
+
+    scale = np.mean(naive_errors)
+
+    if scale == 0:
+        return np.nan
+
+    return np.mean(np.abs(y_true - y_pred)) / scale
+
+def bias(y_true, y_pred):
+    return np.mean(y_true - y_pred)
+
 # ============================================================
 # МОДЕЛИ
 # ============================================================
@@ -216,6 +244,17 @@ def forecast_theta(y_train, y_test, theta=2.0):
 
     return forecast
 
+def naive_forecast(train, horizon):
+    last_value = train.iloc[-1]
+    return np.repeat(last_value, horizon)
+
+def seasonal_naive_forecast(train, horizon, season_length):
+    last_season = train.iloc[-season_length:]
+    reps = int(np.ceil(horizon / season_length))
+
+    forecast = np.tile(last_season, reps)
+
+    return forecast[:horizon]
 
 # ============================================================
 # ГЛАВНАЯ ФУНКЦИЯ СРАВНЕНИЯ МОДЕЛЕЙ
@@ -286,7 +325,14 @@ def compare_forecast_models(
 
     # Вычисление метрик
     print(f"\n{'─' * 80}")
-    print(f"{'Модель':<22} {'MAE':>12} {'RMSE':>12} {'MAPE':>10} {'Рейтинг':>10}")
+    print(
+        f"{'Модель':<22} "
+        f"{'MASE':>10} "
+        f"{'MAE':>10} "
+        f"{'RMSE':>10} "
+        f"{'Bias':>10} "
+        f"{'MAPE':>10}"
+    )
     print(f"{'─' * 80}")
 
     metrics = {}
@@ -302,10 +348,90 @@ def compare_forecast_models(
             if np.isnan(mape):
                 mape = np.inf
 
-        metrics[model_name] = {'mae': mae, 'rmse': rmse, 'mape': mape}
+        metrics[model_name] = {
+            'mae': mae,
+            'rmse': rmse,
+            'mape': mape,
+            'mase': mase(
+                y_train=y_train,
+                y_true=y_test,
+                y_pred=forecast,
+                seasonal_period=1
+            ),
+            'bias': bias(
+                y_true=y_test,
+                y_pred=forecast
+            )
+        }
 
-    # Сортировка по MAPE
-    sorted_models = sorted(metrics.items(), key=lambda x: x[1]['mape'])
+    metrics_df = pd.DataFrame(metrics).T
+
+    metrics_df = metrics_df[
+        ['mase', 'mae', 'rmse', 'bias', 'mape']
+    ]
+
+    metrics_df.columns = [
+        'MASE (основная)',
+        'MAE',
+        'RMSE',
+        'Bias',
+        'MAPE (%)'
+    ]
+
+    metrics_df = metrics_df.sort_values(
+        'MASE (основная)'
+    )
+
+    print("\nРейтинг моделей:")
+    print(metrics_df)
+
+    best_model = metrics_df.index[0]
+
+    print("\n" + "=" * 60)
+    print(f"ЛУЧШАЯ МОДЕЛЬ ПО MASE: {best_model}")
+    print("=" * 60)
+
+    print(
+        f"MASE = {metrics_df.loc[best_model, 'MASE (основная)']:.3f}"
+    )
+    print(
+        f"MAE  = {metrics_df.loc[best_model, 'MAE']:.3f}"
+    )
+    print(
+        f"RMSE = {metrics_df.loc[best_model, 'RMSE']:.3f}"
+    )
+    print(
+        f"Bias = {metrics_df.loc[best_model, 'Bias']:.3f}"
+    )
+    print(
+        f"MAPE = {metrics_df.loc[best_model, 'MAPE (%)']:.2f}%"
+    )
+
+    # Сортировка по MASE
+    sorted_models = sorted(
+        metrics.items(),
+        key=lambda x: x[1]['mase']
+    )
+
+    best_model = sorted_models[0][0]
+
+    print("\nРейтинг моделей по MASE:")
+    for model_name, m in sorted_models:
+
+        mase_value = m['mase']
+
+        if mase_value < 1:
+            verdict = "лучше наивного прогноза"
+        elif np.isclose(mase_value, 1, atol=0.05):
+            verdict = "на уровне наивного прогноза"
+        else:
+            verdict = "хуже наивного прогноза"
+
+        print(
+            f"{model_name}: "
+            f"MASE={mase_value:.3f} "
+            f"({verdict})"
+        )
 
     for rank, (model_name, m) in enumerate(sorted_models, 1):
         stars = '★★★' if rank == 1 else ('★★' if rank == 2 else ('★' if rank == 3 else ''))
@@ -365,7 +491,10 @@ def compare_forecast_models(
                  label=f'Лучшая: {best_model}')
         ax2.plot(dates_test, results['Naïve (last)'], 'gray', linestyle=':', linewidth=2,
                  label='Naïve (бенчмарк)')
-        ax2.set_title(f'Лучшая модель: {best_model} (MAPE={metrics[best_model]["mape"]:.1f}%)')
+        ax2.set_title(
+            f'Лучшая модель: {best_model} '
+            f'(MASE={metrics[best_model]["mase"]:.3f})'
+        )
         ax2.tick_params(axis='x', rotation=45)
         ax2.legend()
         ax2.grid(True, alpha=0.3)
@@ -412,7 +541,7 @@ def compare_forecast_models(
         'results': results,
         'metrics': metrics,
         'best_model': sorted_models[0][0] if sorted_models else None,
-        'best_mape': sorted_models[0][1]['mape'] if sorted_models else None,
+        'best_mase': sorted_models[0][1]['mase'] if sorted_models else None,
     }
 
 
@@ -471,7 +600,7 @@ if __name__ == "__main__":
             'file': 'ObhKartinaObTic.xlsx',
             'seasonal': True,
             'breaks': ['2024-Q3'],
-        },
+        }
     }
 
     all_results = {}
@@ -507,4 +636,9 @@ if __name__ == "__main__":
                 improvement = "✅ Да"
             elif res['best_model'] and 'SARIMAX' in res['best_model']:
                 improvement = "═ Равно"
-            print(f"{name:<30} {res['best_model']:<20} {res['best_mape']:>9.1f}% {improvement:>20}")
+            print(
+                f"{'Показатель':<30} "
+                f"{'Лучшая модель':<20} "
+                f"{'MASE':>10} "
+                f"{'Лучше SARIMAX?':>20}"
+            )
