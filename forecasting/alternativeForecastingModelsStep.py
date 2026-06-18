@@ -556,50 +556,50 @@ if __name__ == "__main__":
     print("█" * 70)
 
     specs = {
-        'DboFizLKolObs': {
-            'file': 'DboFizLKolObs.xlsx',
-            'seasonal': False,
-            'breaks': ['2023-Q2', '2024-Q4'],
-        },
-        'DboFizObTic': {
-            'file': 'DboFizObTic.xlsx',
-            'seasonal': False,
-            'breaks': ['2022-Q3', '2023-Q2', '2024-Q3'],
-        },
-        'InterResBezlicenzii': {
-            'file': 'InterResBezlicenzii.xlsx',
-            'seasonal': False,
-            'breaks': ['2023-Q1', '2025-Q1'],
-        },
-        'InterResPiramid': {
-            'file': 'InterResPiramid.xlsx',
-            'seasonal': False,
-            'breaks': ['2023-Q1'],
-        },
-        'MohenTel8800': {
-            'file': 'MohenTel8800.xlsx',
-            'seasonal': False,
-            'breaks': None,
-        },
-        'MohenTelGorod': {
-            'file': 'MohenTelGorod.xlsx',
-            'seasonal': False,
-            'breaks': ['2021-Q4', '2022-Q4'],
-        },
-        'MohenTelMobilka': {
-            'file': 'MohenTelMobilka.xlsx',
-            'seasonal': False,
-            'breaks': ['2022-Q3', '2023-Q4'],
-        },
-        'ObhKartinaKolObs': {
-            'file': 'ObhKartinaKolObs.xlsx',
-            'seasonal': False,
-            'breaks': ['2023-Q2'],
-        },
+        # 'DboFizLKolObs': {
+        #     'file': 'DboFizLKolObs.xlsx',
+        #     'seasonal': False,
+        #     'breaks': ['2022-Q4', '2025-Q1'],
+        # },
+        # 'DboFizObTic': {
+        #     'file': 'DboFizObTic.xlsx',
+        #     'seasonal': False,
+        #     'breaks': ['2022-Q2', '2023-Q2', '2024-Q3'],
+        # },
+        # 'InterResBezlicenzii': {
+        #     'file': 'InterResBezlicenzii.xlsx',
+        #     'seasonal': False,
+        #     'breaks': ['2023-Q1', '2025-Q1'],
+        # },
+        # 'InterResPiramid': {
+        #     'file': 'InterResPiramid.xlsx',
+        #     'seasonal': False,
+        #     'breaks': ['2022-Q4'],
+        # },
+        # 'MohenTel8800': {
+        #     'file': 'MohenTel8800.xlsx',
+        #     'seasonal': False,
+        #     'breaks': None,
+        # },
+        # 'MohenTelGorod': {
+        #     'file': 'MohenTelGorod.xlsx',
+        #     'seasonal': False,
+        #     'breaks': ['2022-Q4'],
+        # },
+        # 'MohenTelMobilka': {
+        #     'file': 'MohenTelMobilka.xlsx',
+        #     'seasonal': False,
+        #     'breaks': ['2022-Q2', '2023-Q3'],
+        # },
+        # 'ObhKartinaKolObs': {
+        #     'file': 'ObhKartinaKolObs.xlsx',
+        #     'seasonal': False,
+        #     'breaks': ['2025-Q1'],
+        # },
         'ObhKartinaObTic': {
             'file': 'ObhKartinaObTic.xlsx',
             'seasonal': True,
-            'breaks': ['2024-Q3'],
+            'breaks': ['2024-Q2'],
         }
     }
 
