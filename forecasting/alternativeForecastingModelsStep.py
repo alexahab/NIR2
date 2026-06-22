@@ -256,6 +256,103 @@ def seasonal_naive_forecast(train, horizon, season_length):
 
     return forecast[:horizon]
 
+
+# ============================================================
+# ФИНАЛЬНЫЙ ПРОГНОЗ НА 4 КВАРТАЛА ВПЕРЕД
+# ============================================================
+
+def forecast_future(
+        best_model_name,
+        y,
+        dates,
+        seasonal=False,
+        horizon=4
+):
+
+    if best_model_name == 'Naïve (last)':
+
+        forecast = np.repeat(y[-1], horizon)
+
+    elif best_model_name == 'Naïve (drift)':
+
+        drift = (y[-1] - y[0]) / (len(y) - 1)
+
+        forecast = np.array([
+            y[-1] + drift * h
+            for h in range(1, horizon + 1)
+        ])
+
+    elif best_model_name == 'ETS':
+
+        model = ExponentialSmoothing(
+            y,
+            trend='add',
+            seasonal='add' if seasonal else None,
+            seasonal_periods=4 if seasonal else None,
+            initialization_method='estimated'
+        )
+
+        fitted = model.fit()
+
+        forecast = fitted.forecast(horizon)
+
+    elif best_model_name.startswith('ARIMA'):
+
+        m = re.search(
+            r'ARIMA\((\d+),\s*(\d+),\s*(\d+)\)',
+            best_model_name
+        )
+
+        if m:
+            p, d, q = map(int, m.groups())
+        else:
+            p, d, q = (0, 2, 1)
+
+        fitted = ARIMA(
+            y,
+            order=(p, d, q)
+        ).fit()
+
+        forecast = fitted.forecast(horizon)
+
+    elif best_model_name == 'Theta':
+
+        forecast = forecast_theta(
+            y,
+            np.zeros(horizon)
+        )
+
+    elif best_model_name == 'Prophet':
+
+        df_train = pd.DataFrame({
+            'ds': dates,
+            'y': y
+        })
+
+        model = Prophet(
+            yearly_seasonality=False,
+            weekly_seasonality=False,
+            daily_seasonality=False,
+            changepoint_prior_scale=0.5
+        )
+
+        model.fit(df_train)
+
+        future = model.make_future_dataframe(
+            periods=horizon,
+            freq='QE'
+        )
+
+        fc = model.predict(future)
+
+        forecast = fc['yhat'].tail(horizon).values
+
+    else:
+
+        forecast = np.repeat(y[-1], horizon)
+
+    return np.asarray(forecast)
+
 # ============================================================
 # ГЛАВНАЯ ФУНКЦИЯ СРАВНЕНИЯ МОДЕЛЕЙ
 # ============================================================
@@ -415,6 +512,15 @@ def compare_forecast_models(
 
     best_model = sorted_models[0][0]
 
+    best_forecast_test = results[best_model]
+
+    residuals = y_test - best_forecast_test
+
+    sigma = np.std(
+        residuals,
+        ddof=1
+    )
+
     print("\nРейтинг моделей по MASE:")
     for model_name, m in sorted_models:
 
@@ -454,6 +560,126 @@ def compare_forecast_models(
             row += f" {results[model_name][i]:>12.0f}"
         print(row)
 
+    # ============================================================
+    # ПРОГНОЗ НА 4 КВАРТАЛА ВПЕРЕД
+    # ============================================================
+
+    future_forecast = forecast_future(
+        best_model,
+        y,
+        dates_pd,
+        seasonal=seasonal,
+        horizon=4
+    )
+
+    last_period = pd.Period(
+        _quarter_to_str(dates_pd[-1]),
+        freq='Q'
+    )
+
+    future_periods = [
+        str(last_period + i)
+        for i in range(1, 5)
+    ]
+
+    # 95% интервалы
+    lower = []
+    upper = []
+
+    for h in range(1, 5):
+        width = (
+                1.96 *
+                sigma *
+                np.sqrt(h)
+        )
+
+        lower.append(
+            future_forecast[h - 1] - width
+        )
+
+        upper.append(
+            future_forecast[h - 1] + width
+        )
+
+    future_table = pd.DataFrame({
+        'Квартал': future_periods,
+        'Прогноз': np.round(future_forecast, 0),
+        'Нижняя 95%': np.round(lower, 0),
+        'Верхняя 95%': np.round(upper, 0)
+    })
+
+    print()
+    print("═" * 80)
+    print("ПРОГНОЗ НА 4 КВАРТАЛА ВПЕРЕД")
+    print("═" * 80)
+
+    print(
+        future_table.to_string(index=False)
+    )
+
+    # ============================================================
+    # ГРАФИК ПРОГНОЗА НА 4 КВАРТАЛА ВПЕРЕД
+    # ============================================================
+
+    plt.figure(figsize=(12, 6))
+
+    # История
+    plt.plot(
+        dates_pd,
+        y,
+        marker='o',
+        linewidth=2,
+        label='Фактические данные'
+    )
+
+    # Будущие даты
+    future_dates = pd.date_range(
+        start=dates_pd[-1] + pd.offsets.QuarterBegin(),
+        periods=4,
+        freq='QS'
+    )
+
+    # Прогноз
+    plt.plot(
+        future_dates,
+        future_forecast,
+        marker='s',
+        linestyle='--',
+        linewidth=2,
+        label=f'Прогноз ({best_model})'
+    )
+
+    # Интервал
+    plt.fill_between(
+        future_dates,
+        lower,
+        upper,
+        alpha=0.25,
+        label='95% доверительный интервал'
+    )
+
+    # Граница истории и прогноза
+    plt.axvline(
+        dates_pd[-1],
+        linestyle=':',
+        linewidth=2,
+        color='black'
+    )
+
+    plt.title(
+        f'{name}\nПрогноз на 4 квартала вперед'
+    )
+
+    plt.xlabel('Период')
+    plt.ylabel('Значение')
+
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+
+    plt.show()
+
     # Визуализация
     if show_plot:
         fig, axes = plt.subplots(2, 2, figsize=(18, 10))
@@ -485,6 +711,16 @@ def compare_forecast_models(
         # График 2: Лучшая модель vs бенчмарк
         ax2 = axes[0, 1]
         best_model = sorted_models[0][0]
+
+        best_forecast_test = results[best_model]
+
+        residuals = y_test - best_forecast_test
+
+        sigma = np.std(
+            residuals,
+            ddof=1
+        )
+
         ax2.plot(dates_train, y_train, 'b-', linewidth=2, label='Обучение')
         ax2.plot(dates_test, y_test, 'g-o', markersize=10, linewidth=2, label='Факт')
         ax2.plot(dates_test, results[best_model], 'r--o', markersize=10, linewidth=2,
@@ -540,8 +776,12 @@ def compare_forecast_models(
         'name': name,
         'results': results,
         'metrics': metrics,
-        'best_model': sorted_models[0][0] if sorted_models else None,
-        'best_mase': sorted_models[0][1]['mase'] if sorted_models else None,
+        'best_model': best_model,
+        'best_mase': metrics[best_model]['mase'],
+        'future_forecast': future_forecast,
+        'future_periods': future_periods,
+        'lower95': lower,
+        'upper95': upper
     }
 
 
@@ -556,46 +796,46 @@ if __name__ == "__main__":
     print("█" * 70)
 
     specs = {
-        # 'DboFizLKolObs': {
-        #     'file': 'DboFizLKolObs.xlsx',
-        #     'seasonal': False,
-        #     'breaks': ['2022-Q4', '2025-Q1'],
-        # },
-        # 'DboFizObTic': {
-        #     'file': 'DboFizObTic.xlsx',
-        #     'seasonal': False,
-        #     'breaks': ['2022-Q2', '2023-Q2', '2024-Q3'],
-        # },
-        # 'InterResBezlicenzii': {
-        #     'file': 'InterResBezlicenzii.xlsx',
-        #     'seasonal': False,
-        #     'breaks': ['2023-Q1', '2025-Q1'],
-        # },
-        # 'InterResPiramid': {
-        #     'file': 'InterResPiramid.xlsx',
-        #     'seasonal': False,
-        #     'breaks': ['2022-Q4'],
-        # },
-        # 'MohenTel8800': {
-        #     'file': 'MohenTel8800.xlsx',
-        #     'seasonal': False,
-        #     'breaks': None,
-        # },
-        # 'MohenTelGorod': {
-        #     'file': 'MohenTelGorod.xlsx',
-        #     'seasonal': False,
-        #     'breaks': ['2022-Q4'],
-        # },
-        # 'MohenTelMobilka': {
-        #     'file': 'MohenTelMobilka.xlsx',
-        #     'seasonal': False,
-        #     'breaks': ['2022-Q2', '2023-Q3'],
-        # },
-        # 'ObhKartinaKolObs': {
-        #     'file': 'ObhKartinaKolObs.xlsx',
-        #     'seasonal': False,
-        #     'breaks': ['2025-Q1'],
-        # },
+        'DboFizLKolObs': {
+            'file': 'DboFizLKolObs.xlsx',
+            'seasonal': False,
+            'breaks': ['2022-Q4', '2025-Q1'],
+        },
+        'DboFizObTic': {
+            'file': 'DboFizObTic.xlsx',
+            'seasonal': False,
+            'breaks': ['2022-Q2', '2023-Q2', '2024-Q3'],
+        },
+        'InterResBezlicenzii': {
+            'file': 'InterResBezlicenzii.xlsx',
+            'seasonal': False,
+            'breaks': ['2023-Q1', '2025-Q1'],
+        },
+        'InterResPiramid': {
+            'file': 'InterResPiramid.xlsx',
+            'seasonal': False,
+            'breaks': ['2022-Q4'],
+        },
+        'MohenTel8800': {
+            'file': 'MohenTel8800.xlsx',
+            'seasonal': False,
+            'breaks': None,
+        },
+        'MohenTelGorod': {
+            'file': 'MohenTelGorod.xlsx',
+            'seasonal': False,
+            'breaks': ['2022-Q4'],
+        },
+        'MohenTelMobilka': {
+            'file': 'MohenTelMobilka.xlsx',
+            'seasonal': False,
+            'breaks': ['2022-Q2', '2023-Q3'],
+        },
+        'ObhKartinaKolObs': {
+            'file': 'ObhKartinaKolObs.xlsx',
+            'seasonal': True,
+            'breaks': ['2025-Q1'],
+        },
         'ObhKartinaObTic': {
             'file': 'ObhKartinaObTic.xlsx',
             'seasonal': True,
